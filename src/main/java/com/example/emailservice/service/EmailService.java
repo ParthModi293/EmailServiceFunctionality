@@ -5,10 +5,12 @@ import com.example.emailservice.dto.EmailDto;
 import com.example.emailservice.dto.EmailHistory;
 import com.example.emailservice.repository.EmailHistoryRepository;
 import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,11 +30,16 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String sender;
 
+
+
+
     public EmailService(JavaMailSender mailSender, EmailHistoryRepository emailHistoryRepository) {
         this.mailSender = mailSender;
         this.emailHistoryRepository = emailHistoryRepository;
     }
 
+
+    @Async
     public void sendEmail(EmailDto emailDto) throws MessagingException {
 
         EmailHistory emailHistory = new EmailHistory();
@@ -40,7 +47,7 @@ public class EmailService {
         if (emailDto.getFrom() != null && !emailDto.getFrom().isEmpty()) {
             emailHistory.setFromAddress(emailDto.getFrom());
         }else{
-            emailHistory.setFromAddress(sender);
+          emailHistory.setFromAddress(sender);
         }
 
         emailHistory.setToAddresses(String.join(",", emailDto.getTo()));
@@ -67,6 +74,7 @@ public class EmailService {
             } else {
                 helper.setFrom(sender);
             }
+
             helper.setTo(emailDto.getTo().toArray(new String[0]));
             helper.setSubject(replacePlaceholders(emailDto.getSubject(), emailDto.getPlaceholders()));
             helper.setText(replacePlaceholders(emailDto.getBody(), emailDto.getPlaceholders()), true);
@@ -89,7 +97,7 @@ public class EmailService {
 
 
 
-        } catch (Exception e) {
+        } catch (MessagingException e) {
             e.printStackTrace();
             emailHistory.setStatus("FAILED");
             emailHistory.setErrorMessage(e.getMessage());

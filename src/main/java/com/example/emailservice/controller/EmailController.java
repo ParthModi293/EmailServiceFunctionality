@@ -3,6 +3,8 @@ package com.example.emailservice.controller;
 import com.example.emailservice.dto.EmailDto;
 import com.example.emailservice.service.EmailService;
 import jakarta.mail.MessagingException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,17 +22,20 @@ public class EmailController {
     }
 
     @PostMapping("/send")
-    public String sendEmail(@RequestBody EmailDto emailDto, @RequestPart(value = "attachments", required=false) List<MultipartFile> attachments ) {
+    public ResponseEntity<String> sendEmail(@RequestBody EmailDto emailDto, @RequestPart(value = "attachments", required=false) List<MultipartFile> attachments ) {
         try {
             if(attachments != null && !attachments.isEmpty()) {
                 emailDto.setAttachments(attachments);
             }
 
             emailService.sendEmail(emailDto);
-            return "Email sent successfully!";
+            return ResponseEntity.status(HttpStatus.OK).body("Email sent successfully");
         } catch (MessagingException e) {
-            e.printStackTrace();
-            return "Failed to send email!";
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to send email: " + e.getMessage());
+
+        } catch (Exception e) {
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred: " + e.getMessage());
         }
     }
 
