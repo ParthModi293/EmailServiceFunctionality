@@ -5,7 +5,6 @@ import com.example.emailservice.dto.EmailDto;
 import com.example.emailservice.dto.EmailHistory;
 import com.example.emailservice.repository.EmailHistoryRepository;
 import jakarta.mail.MessagingException;
-import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
