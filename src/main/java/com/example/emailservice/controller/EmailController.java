@@ -1,5 +1,6 @@
 package com.example.emailservice.controller;
 
+import com.example.emailservice.KafkaProducer.KafkaMessagePubliser;
 import com.example.emailservice.dto.EmailDto;
 import com.example.emailservice.service.EmailService;
 import jakarta.mail.MessagingException;
@@ -16,12 +17,14 @@ import java.util.List;
 public class EmailController {
 
     private final EmailService emailService;
+    private final KafkaMessagePubliser kafkaMessagePubliser;
 
-    public EmailController(EmailService emailService) {
+    public EmailController(EmailService emailService, KafkaMessagePubliser kafkaMessagePubliser) {
         this.emailService = emailService;
+        this.kafkaMessagePubliser = kafkaMessagePubliser;
     }
 
-    @PostMapping("/send")
+   /* @PostMapping("/send")
     public ResponseEntity<String> sendEmail(@RequestBody EmailDto emailDto, @RequestPart(value = "attachments", required=false) List<MultipartFile> attachments ) {
         try {
             if(attachments != null && !attachments.isEmpty()) {
@@ -33,6 +36,21 @@ public class EmailController {
         } catch (MessagingException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to send email: " + e.getMessage());
 
+        } catch (Exception e) {
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred: " + e.getMessage());
+        }
+    }*/
+
+    @PostMapping("/send")
+    public ResponseEntity<String> sendEmail(@RequestBody EmailDto emailDto, @RequestPart(value = "attachments", required=false) List<MultipartFile> attachments ) {
+        try {
+            if(attachments != null && !attachments.isEmpty()) {
+                emailDto.setAttachments(attachments);
+            }
+
+            kafkaMessagePubliser.sendMessage(emailDto,0);
+            return ResponseEntity.status(HttpStatus.OK).body("Email sent successfully");
         } catch (Exception e) {
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred: " + e.getMessage());
