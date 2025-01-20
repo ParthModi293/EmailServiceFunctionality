@@ -6,4 +6,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface EmailHistoryRepository extends JpaRepository<EmailHistory, Integer> {
+
+
+
 }
