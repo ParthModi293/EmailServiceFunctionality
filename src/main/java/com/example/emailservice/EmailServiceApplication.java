@@ -12,4 +12,12 @@ public class EmailServiceApplication {
         SpringApplication.run(EmailServiceApplication.class, args);
     }
 
+
+//    For Kafka ------------------>>>>>>>>>>>>>.
+//    https://github.com/givanthak/webtrekk-email-service/blob/master/src/main/java/com/webtrekk/email/service/api/EmailController.java
+
+
+   /* spring.kafka.bootstrap-servers=localhost:9092
+    spring.kafka.consumer.group-id=email-group
+    spring.kafka.consumer.auto-offset-reset=earliest*/
 }
