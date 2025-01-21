@@ -1,5 +1,6 @@
 package com.example.emailservice.dto;
 
+import lombok.Builder;
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -7,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 @Data
+@Builder
 
 public class EmailDto {
     private List<String> to;

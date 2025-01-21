@@ -1,5 +1,7 @@
 package com.example.emailservice.controller;
 
+import com.example.emailservice.bean.EmailBean;
+import com.example.emailservice.common.ResponseBean;
 import com.example.emailservice.dto.EmailDto;
 import com.example.emailservice.service.EmailService;
 import jakarta.mail.MessagingException;
@@ -12,7 +14,8 @@ import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("email")
+@RequestMapping("/email-service")
+@CrossOrigin
 public class EmailController {
 
     private final EmailService emailService;
@@ -21,7 +24,7 @@ public class EmailController {
         this.emailService = emailService;
     }
 
-    @PostMapping("/send")
+   /* @PostMapping("/send")
     public ResponseEntity<String> sendEmail(@RequestBody EmailDto emailDto, @RequestPart(value = "attachments", required=false) List<MultipartFile> attachments ) {
         try {
             if(attachments != null && !attachments.isEmpty()) {
@@ -37,6 +40,12 @@ public class EmailController {
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred: " + e.getMessage());
         }
+    }*/
+
+    @PostMapping("/send-email")
+    public ResponseEntity<ResponseBean<?>> filterAlert(@RequestBody EmailBean emailBean) throws Exception {
+        ResponseBean<?> responseBean = emailService.mailSender(emailBean);
+        return new ResponseEntity<>(responseBean, responseBean.getRStatus());
     }
 
 
