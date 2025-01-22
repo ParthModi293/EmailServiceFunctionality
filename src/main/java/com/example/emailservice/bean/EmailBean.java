@@ -10,11 +10,12 @@ import java.util.Map;
 public class EmailBean {
 
     private String templateName;
-    private String from;
+    private String dbName;
     private List<String> to;
     private List<String> cc;
     private List<String> bcc;
-    private Map<String, Object> placeHolder;
+    private Map<String, Object> subjectPlaceHolder;
+    private Map<String, Object> bodyPlaceHolder;
     private List<MultipartFile> file;
 
 }

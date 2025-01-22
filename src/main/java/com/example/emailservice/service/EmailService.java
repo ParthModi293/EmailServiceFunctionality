@@ -1,10 +1,13 @@
 package com.example.emailservice.service;
 
-
+import com.example.emailservice.bean.DynamicMailSender;
 import com.example.emailservice.bean.EmailBean;
 import com.example.emailservice.common.ResponseBean;
+import com.example.emailservice.dto.EmailConfiguration;
 import com.example.emailservice.dto.EmailDto;
 import com.example.emailservice.dto.EmailHistory;
+import com.example.emailservice.dto.EmailPropertiesDto;
+import com.example.emailservice.repository.EmailConfigurationRepository;
 import com.example.emailservice.repository.EmailDao;
 import com.example.emailservice.repository.EmailHistoryRepository;
 import com.example.emailservice.util.JacksonService;
@@ -12,11 +15,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.TopicPartition;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -24,43 +27,54 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Objects;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Service
 @Log4j2
 public class EmailService {
 
-    private final JavaMailSender mailSender;
+
     private final EmailHistoryRepository emailHistoryRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final EmailDao emailDao;
+    private final ObjectMapper objectMapper;
 
 
-    @Value("${spring.mail.username}")
-    private String sender;
+    private final DynamicMailSender dynamicMailSender;
+
+ /*   @Value("${spring.mail.username}")
+    private String sender;*/
 
 
-    public EmailService(JavaMailSender mailSender, EmailHistoryRepository emailHistoryRepository, KafkaTemplate<String, Object> kafkaTemplate, EmailDao emailDao) {
-        this.mailSender = mailSender;
+    public EmailService(EmailHistoryRepository emailHistoryRepository, KafkaTemplate<String, Object> kafkaTemplate, EmailDao emailDao, ObjectMapper objectMapper, EmailConfigurationRepository emailConfigurationRepository, DynamicMailSender dynamicMailSender) {
         this.emailHistoryRepository = emailHistoryRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.emailDao = emailDao;
+        this.objectMapper = objectMapper;
+        this.dynamicMailSender = dynamicMailSender;
     }
 
-
-    @Async
     public void sendEmail(EmailDto emailDto) throws MessagingException {
+
+
+//        EmailConfiguration emailConfiguration = emailConfigurationRepository.findByUsername(emailDto.getFrom());
+
+
+        EmailPropertiesDto emailProperties = EmailPropertiesDto.builder()
+                .username(emailDto.getFrom())
+                .password(emailDto.getPassword())
+                .host(emailDto.getHost())
+                .port(emailDto.getPort()).build();
+
+        JavaMailSender mailSender = dynamicMailSender.createMailSender(emailProperties);
 
         EmailHistory emailHistory = new EmailHistory();
 
-        if (emailDto.getFrom() != null && !emailDto.getFrom().isEmpty()) {
-            emailHistory.setFromAddress(emailDto.getFrom());
-        } else {
-            emailHistory.setFromAddress(sender);
-        }
-
+        emailHistory.setFromAddress(emailProperties.getUsername());
         emailHistory.setToAddresses(String.join(",", emailDto.getTo()));
         emailHistory.setCcAddresses(emailDto.getCc() != null ? String.join(",", emailDto.getCc()) : null);
         emailHistory.setBccAddresses(emailDto.getBcc() != null ? String.join(",", emailDto.getBcc()) : null);
@@ -80,12 +94,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
 
-            if (emailDto.getFrom() != null && !emailDto.getFrom().isEmpty()) {
-                helper.setFrom(emailDto.getFrom());
-            } else {
-                helper.setFrom(sender);
-            }
-
+            helper.setFrom(emailProperties.getUsername());
             helper.setTo(emailDto.getTo().toArray(new String[0]));
             helper.setSubject(emailDto.getSubject());
             helper.setText(emailDto.getBody(), true);
@@ -103,53 +112,51 @@ public class EmailService {
                     helper.addAttachment(Objects.requireNonNull(file.getOriginalFilename()), file);
                 }
             }
+            System.out.println("Here Start----->>>>>>"+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
+
             mailSender.send(message);
+            System.out.println("Here End----->>>>>>"+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
+
             emailHistory.setStatus("SUCCESS");
 
 
-        } catch (MessagingException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            log.error(e);
             emailHistory.setStatus("FAILED");
             emailHistory.setErrorMessage(e.getMessage());
+        } finally {
+            emailHistoryRepository.save(emailHistory);
+
         }
 
-
-        emailHistoryRepository.save(emailHistory);
 
     }
 
-    /*private String replacePlaceholders(String text, Map<String, String> placeholders) {
-        if (text == null || placeholders == null) {
-            return text;
-        }
+    public ResponseBean<Void> mailSender(EmailBean emailBean) throws Exception {
 
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            String placeholder = "##" + entry.getKey() + "##";
-            text = text.replace(placeholder, entry.getValue());
-        }
-        return text;
-    }*/
 
-    public ResponseBean<Void> mailSender(EmailBean emailBean, MultipartFile file) throws Exception {
-        Map mailDetails = emailDao.getMailDetails(emailBean.getTemplateName());
+        Map mailDetails = emailDao.getMailDetails(emailBean.getTemplateName(), emailBean.getDbName());
+        if (mailDetails == null || mailDetails.isEmpty()) {
+            mailDetails = emailDao.getMailDetails(emailBean.getTemplateName(), "email");
+        }
 
         String body = mailDetails.get("body").toString();
         String subject = mailDetails.get("subject").toString();
 
-        System.out.println("Raw body:" + body);
-        System.out.println("Raw subject:" + subject);
-
-        for (Map.Entry<String, Object> entry : emailBean.getPlaceHolder().entrySet()) {
+        for (Map.Entry<String, Object> entry : emailBean.getBodyPlaceHolder().entrySet()) {
             String placeholder = "##" + entry.getKey() + "##";
             body = body.replace(placeholder, entry.getValue().toString());
+
+        }
+
+        for (Map.Entry<String, Object> entry : emailBean.getSubjectPlaceHolder().entrySet()) {
+            String placeholder = "##" + entry.getKey() + "##";
+
             subject = subject.replace(placeholder, entry.getValue().toString());
         }
 
-        System.out.println("Final body:" + body);
-        System.out.println("Final subject:" + subject);
-
         EmailDto emailDto = EmailDto.builder()
-                .from(emailBean.getFrom())
+                .from(mailDetails.get("fromEmailId").toString())
                 .to(emailBean.getTo())
                 .cc(emailBean.getCc())
                 .bcc(emailBean.getBcc())
@@ -157,48 +164,62 @@ public class EmailService {
                 .body(body)
                 .version(mailDetails.get("version").toString())
                 .attachments(emailBean.getFile())
+                .host(mailDetails.get("host").toString())
+                .password(mailDetails.get("password").toString())
+                .port(Integer.parseInt(mailDetails.get("port").toString()))
                 .build();
-
-        // TODO: set s3 path into the attachment section that can be multiple
-        emailDto.getAttachments().add(file);
 
         kafkaTemplate.send("email-topic", Integer.parseInt(mailDetails.get("priority").toString()), null, new ObjectMapper().writeValueAsString(emailDto));
         return new ResponseBean<>(HttpStatus.OK, "Mail sender under process", "Mail sender under process", null);
     }
 
     @KafkaListener(topicPartitions = @TopicPartition(topic = "email-topic", partitions = {"1"}), groupId = "email-group", errorHandler = "myErrorHandler")
-    public ResponseBean<Void> emailConsumer1(String message) {
+    public void emailConsumer1P1(String message) {
         try {
-            EmailDto emailDto = JacksonService.getInstance().convertJsonToDto(message, EmailDto.class);
-            sendEmail(emailDto);
-            return new ResponseBean<>(HttpStatus.OK, "Main sent", "Main sent", null);
+            EmailDto emailDto = objectMapper.readValue(message, EmailDto.class);
+
+                    sendEmail(emailDto);
+//                    System.out.println("1-------------------------------------------------------------1");
         } catch (Exception e) {
             log.error(e);
-            return new ResponseBean<>(HttpStatus.BAD_REQUEST, "Error during mail sent", "Error during mail sent", null);
         }
     }
-
-    @KafkaListener(topicPartitions = @TopicPartition(topic = "email-topic", partitions = {"2"}), groupId = "email-group", errorHandler = "myErrorHandler")
-    public ResponseBean<Void> emailConsumer2(String message) {
+  /*  @KafkaListener(topicPartitions = @TopicPartition(topic = "email-topic", partitions = {"1"}), groupId = "email-group", errorHandler = "myErrorHandler")
+    public void emailConsumer2P1(String message) {
         try {
-            EmailDto emailDto = JacksonService.getInstance().convertJsonToDto(message, EmailDto.class);
+            EmailDto emailDto = objectMapper.readValue(message, EmailDto.class);
             sendEmail(emailDto);
-            return new ResponseBean<>(HttpStatus.OK, "Main sent", "Main sent", null);
+            System.out.println("2 *********************************************************** 2");
         } catch (Exception e) {
             log.error(e);
-            return new ResponseBean<>(HttpStatus.BAD_REQUEST, "Error during mail sent", "Error during mail sent", null);
+        }
+    }*/
+    @KafkaListener(topicPartitions = @TopicPartition(topic = "email-topic", partitions = {"2"}), groupId = "email-group", errorHandler = "myErrorHandler")
+    public void emailConsumer2(String message) {
+        try {
+            EmailDto emailDto = objectMapper.readValue(message, EmailDto.class);
+            sendEmail(emailDto);
+
+            System.out.println("Mail sent-------------------------------------->>>> " +
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
+        } catch (Exception e) {
+            log.error(e);
+
         }
     }
 
     @KafkaListener(topicPartitions = @TopicPartition(topic = "email-topic", partitions = {"3"}), groupId = "email-group", errorHandler = "myErrorHandler")
-    public ResponseBean<Void> emailConsumer3(String message) {
+    public void emailConsumer3(String message) {
         try {
-            EmailDto emailDto = JacksonService.getInstance().convertJsonToDto(message, EmailDto.class);
+            EmailDto emailDto = objectMapper.readValue(message, EmailDto.class);
             sendEmail(emailDto);
-            return new ResponseBean<>(HttpStatus.OK, "Main sent", "Main sent", null);
+
+            System.out.println("Mail sent-------------------------------------->>>> " +
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
         } catch (Exception e) {
             log.error(e);
-            return new ResponseBean<>(HttpStatus.BAD_REQUEST, "Error during mail sent", "Error during mail sent", null);
+
         }
     }
+
 }

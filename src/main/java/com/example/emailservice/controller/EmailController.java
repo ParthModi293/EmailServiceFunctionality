@@ -43,8 +43,8 @@ public class EmailController {
     }*/
 
     @PostMapping("/send-email")
-    public ResponseEntity<ResponseBean<?>> filterAlert(@RequestBody EmailBean emailBean, @RequestParam MultipartFile file) throws Exception {
-        ResponseBean<?> responseBean = emailService.mailSender(emailBean, file);
+    public ResponseEntity<ResponseBean<?>> filterAlert(@RequestBody EmailBean emailBean ) throws Exception {
+        ResponseBean<?> responseBean = emailService.mailSender(emailBean);
         return new ResponseEntity<>(responseBean, responseBean.getRStatus());
     }
 

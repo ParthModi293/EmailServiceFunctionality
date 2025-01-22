@@ -20,6 +20,9 @@ public class EmailDto {
     private Map<String, String> placeholders;
     private List<MultipartFile> attachments;
     private String version;
+    private String host;
+    private int port;
+    private String password;
 
 
 }

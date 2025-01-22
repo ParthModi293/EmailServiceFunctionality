@@ -2,12 +2,14 @@ package com.example.emailservice.dto;
 
 
 import jakarta.persistence.*;
+import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
 @Entity
+
 @Table(name="email_history")
 public class EmailHistory {
 
